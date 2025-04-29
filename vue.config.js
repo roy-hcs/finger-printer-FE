@@ -1,4 +1,5 @@
 module.exports = {
+  publicPath: './',
   pwa: {
     name: 'Vue WebAuthn PWA',
     themeColor: '#4DBA87',

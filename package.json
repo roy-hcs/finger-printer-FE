@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A Vue 2 project implementing biometric WebAuthn and PWA features.",
   "main": "src/main.js",
+  "homepage": "https://roy-hcs.github.io/finger-printer-FE/",
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
