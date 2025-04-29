@@ -56,6 +56,7 @@ export default {
       mode: 'login', // login or register
       username: '',
       password: '',
+      userId: '',
       error: null,
       biometricsAvailable: false,
       registrationStep: 0,
@@ -105,6 +106,7 @@ export default {
           
           // 获取用户信息并存储到Vuex
           const user = response.data.user || { id: response.data.userId || 1, username: this.username };
+          this.userId = user.id;
           this.$store.dispatch('login', user);
           
           // 重定向到主页
@@ -116,6 +118,7 @@ export default {
             password: this.password
           });
           console.log('注册成功:', response.data);
+          this.userId = response.data.userId;
           
           // 如果注册成功，显示注册生物识别步骤
           this.registrationStep = 1;
@@ -140,9 +143,9 @@ export default {
       this.error = null;
 
       try {
-        // 从后端获取WebAuthn注册选项 - 更新为正确的endpoint
         const optionsResponse = await api.post('/auth/generate-registration-options', {
-          username: this.username
+          username: this.username,
+          userId: this.userId
         });
         
         const registrationOptions = optionsResponse.data;
@@ -165,7 +168,6 @@ export default {
 
         const registrationResponse = await startRegistration(registrationOptions);
         
-        // 将响应发送到后端验证 - 更新为正确的endpoint
         const verificationResponse = await api.post('/auth/verify-registration', {
           username: this.username,
           registrationResponse
