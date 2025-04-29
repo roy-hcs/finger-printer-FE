@@ -43,7 +43,10 @@ import axios from 'axios';
 
 // 创建API服务
 const api = axios.create({
-  baseURL: 'https://mock-be-roy-hcs-roy-hcs-projects.vercel.app/api',
+  // Use different baseURL based on environment
+  baseURL: process.env.NODE_ENV === 'production' 
+    ? 'https://mock-be.vercel.app/api' 
+    : '/api',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -150,27 +153,16 @@ export default {
         
         const registrationOptions = optionsResponse.data;
         
-        // 确保challenge是适当的格式（Uint8Array）
-        if (typeof registrationOptions.challenge === 'string') {
-          registrationOptions.challenge = Uint8Array.from(
-            atob(registrationOptions.challenge.replace(/-/g, '+').replace(/_/g, '/')), 
-            c => c.charCodeAt(0)
-          );
-        }
+        // Fix: Don't attempt to transform challenge if it's already in the correct format
+        // The library will handle base64url strings automatically
+        console.log('Registration options received:', JSON.stringify(registrationOptions));
         
-        // 确保user.id是适当的格式（Uint8Array）
-        if (registrationOptions.user && typeof registrationOptions.user.id === 'string') {
-          registrationOptions.user.id = Uint8Array.from(
-            atob(registrationOptions.user.id.replace(/-/g, '+').replace(/_/g, '/')), 
-            c => c.charCodeAt(0)
-          );
-        }
-
+        // Start registration without manual conversion
         const registrationResponse = await startRegistration(registrationOptions);
         
         const verificationResponse = await api.post('/auth/verify-registration', {
-          username: this.username,
-          registrationResponse
+          userId: this.userId, // Changed to match expected backend parameter
+          attestationResponse: registrationResponse // Changed to match expected backend parameter
         });
         
         // 注册成功，登录用户
@@ -179,11 +171,11 @@ export default {
         this.$router.push('/home');
         
       } catch (error) {
+        console.error('生物识别注册错误 (详细):', error);
         this.error = error.response?.data?.message || 
                     error.response?.data?.error || 
                     error.message || 
                     '生物识别注册失败';
-        console.error('生物识别注册错误:', error);
       } finally {
         this.loading = false;
       }
@@ -204,37 +196,16 @@ export default {
         });
         
         const authenticationOptions = optionsResponse.data;
+        console.log('Authentication options received:', JSON.stringify(authenticationOptions));
         
-        // 确保challenge是适当的格式（Uint8Array）
-        if (typeof authenticationOptions.challenge === 'string') {
-          authenticationOptions.challenge = Uint8Array.from(
-            atob(authenticationOptions.challenge.replace(/-/g, '+').replace(/_/g, '/')), 
-            c => c.charCodeAt(0)
-          );
-        }
-        
-        // 确保allowCredentials中的id是适当的格式（Uint8Array）
-        if (authenticationOptions.allowCredentials && Array.isArray(authenticationOptions.allowCredentials)) {
-          authenticationOptions.allowCredentials = authenticationOptions.allowCredentials.map(credential => {
-            if (typeof credential.id === 'string') {
-              return {
-                ...credential,
-                id: Uint8Array.from(
-                  atob(credential.id.replace(/-/g, '+').replace(/_/g, '/')), 
-                  c => c.charCodeAt(0)
-                )
-              };
-            }
-            return credential;
-          });
-        }
-
+        // Start authentication without manual conversion
+        // The SimpleWebAuthn library will handle the base64url format
         const authenticationResponse = await startAuthentication(authenticationOptions);
         
-        // 将响应发送到后端验证 - 更新为正确的endpoint
+        // Update parameter name to match backend API
         const verificationResponse = await api.post('/auth/verify-authentication', {
           username: this.username,
-          authenticationResponse
+          assertionResponse: authenticationResponse // Changed to match expected backend parameter
         });
         
         // 认证成功，登录用户
@@ -243,11 +214,11 @@ export default {
         this.$router.push('/home');
         
       } catch (error) {
+        console.error('生物识别登录错误 (详细):', error);
         this.error = error.response?.data?.message || 
                     error.response?.data?.error || 
                     error.message || 
                     '生物识别登录失败';
-        console.error('生物识别登录错误:', error);
       } finally {
         this.loading = false;
       }

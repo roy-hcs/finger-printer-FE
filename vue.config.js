@@ -59,5 +59,14 @@ module.exports = {
       .options({
         fix: true
       })
+  },
+  devServer: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        pathRewrite: { '^/api': '/api' } // Changed to maintain /api prefix
+      }
+    }
   }
 }
