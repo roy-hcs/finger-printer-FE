@@ -146,23 +146,61 @@ export default {
       this.error = null;
 
       try {
+        // Log device info for debugging
+        const userAgent = navigator.userAgent;
+        const isAndroid = /android/i.test(userAgent);
+        console.log('设备信息:', {
+          userAgent,
+          isAndroid,
+          platform: navigator.platform,
+          vendor: navigator.vendor
+        });
+
         const optionsResponse = await api.post('/auth/generate-registration-options', {
           username: this.username,
           userId: this.userId
         });
         
         const registrationOptions = optionsResponse.data;
-        
-        // Fix: Don't attempt to transform challenge if it's already in the correct format
-        // The library will handle base64url strings automatically
         console.log('Registration options received:', JSON.stringify(registrationOptions));
         
-        // Start registration without manual conversion
-        const registrationResponse = await startRegistration(registrationOptions);
+        // For Android, ensure authenticatorSelection is properly set
+        if (isAndroid) {
+          // Ensure these options are set for better Android compatibility
+          registrationOptions.authenticatorSelection = {
+            ...registrationOptions.authenticatorSelection,
+            authenticatorAttachment: 'platform',
+            requireResidentKey: false,
+            userVerification: 'preferred'
+          };
+          console.log('Modified options for Android:', registrationOptions.authenticatorSelection);
+        }
+        
+        // Start registration with timeout handling
+        let registrationResponse;
+        try {
+          const registrationPromise = startRegistration(registrationOptions);
+          
+          // Add a timeout to detect stuck processes
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('WebAuthn registration timed out after 30 seconds')), 30000);
+          });
+          
+          registrationResponse = await Promise.race([registrationPromise, timeoutPromise]);
+          console.log('Registration response received:', registrationResponse);
+        } catch (regError) {
+          console.error('Registration specific error:', regError);
+          // Check for common Android errors
+          if (regError.name === 'NotReadableError') {
+            throw new Error('设备凭证管理器出现问题。请确保您的设备已设置锁屏密码或生物识别，并重试。');
+          }
+          throw regError;
+        }
         
         const verificationResponse = await api.post('/auth/verify-registration', {
-          userId: this.userId, // Changed to match expected backend parameter
-          attestationResponse: registrationResponse // Changed to match expected backend parameter
+          userId: this.userId,
+          attestationResponse: registrationResponse,
+          origin: window.location.origin
         });
         
         // 注册成功，登录用户
@@ -172,10 +210,24 @@ export default {
         
       } catch (error) {
         console.error('生物识别注册错误 (详细):', error);
+        
+        // More descriptive error messages for common WebAuthn errors
+        let errorMessage = '生物识别注册失败';
+        
+        if (error.name === 'AbortError') {
+          errorMessage = '您取消了生物识别注册过程';
+        } else if (error.name === 'NotAllowedError') {
+          errorMessage = '操作被浏览器阻止或用户取消';
+        } else if (error.name === 'SecurityError') {
+          errorMessage = '安全错误：确保您在安全环境(HTTPS)下使用此功能';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = '您的设备不支持所请求的生物识别功能';
+        }
+        
         this.error = error.response?.data?.message || 
                     error.response?.data?.error || 
                     error.message || 
-                    '生物识别注册失败';
+                    errorMessage;
       } finally {
         this.loading = false;
       }
@@ -202,10 +254,10 @@ export default {
         // The SimpleWebAuthn library will handle the base64url format
         const authenticationResponse = await startAuthentication(authenticationOptions);
         
-        // Update parameter name to match backend API
         const verificationResponse = await api.post('/auth/verify-authentication', {
           username: this.username,
-          assertionResponse: authenticationResponse // Changed to match expected backend parameter
+          assertionResponse: authenticationResponse,
+          origin: window.location.origin
         });
         
         // 认证成功，登录用户
